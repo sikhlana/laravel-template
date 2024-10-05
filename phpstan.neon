@@ -2,7 +2,8 @@ includes:
   - vendor/larastan/larastan/extension.neon
 
 parameters:
-  paths: app/
+  paths:
+    - app/
   level: 8
   checkOctaneCompatibility: true
   checkUninitializedProperties: true
