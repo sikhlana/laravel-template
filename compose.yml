@@ -1,0 +1,69 @@
+services:
+  mysql:
+    image: mysql:8.0-oracle
+    profiles:
+      - with-mysql
+    ports:
+      - "23306:3306/tcp"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=secret
+      - MYSQL_DATABASE=${DB_DATABASE}
+      - MYSQL_USER=${DB_USERNAME}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    command:
+      - "--skip-log-bin"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-hlocalhost", "-uroot", "-psecret"]
+      start_period: 10s
+      interval: 10s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "26379:6379/tcp"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      start_period: 5s
+      interval: 10s
+      retries: 5
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "21025:1025/tcp"
+      - "28025:8025/tcp"
+    volumes:
+      - mailpit-data:/data
+    environment:
+      - MP_DATA_FILE=/data/mailpit.db
+
+  minio:
+    image: minio/minio:latest
+    profiles:
+      - with-minio
+    ports:
+      - "29000:9000/tcp"
+    volumes:
+      - minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=${AWS_ACCESS_KEY_ID}
+      - MINIO_ROOT_PASSWORD=${AWS_SECRET_ACCESS_KEY}
+    entrypoint: ["sh"]
+    command: ["-c", "mkdir -p /data/${AWS_BUCKET} && minio server /data"]
+
+volumes:
+  mysql-data:
+    name: ${MYSQL_VOLUME}
+    external: true
+  redis-data:
+    name: ${REDIS_VOLUME}
+    external: true
+  mailpit-data: {}
+  minio-data:
+    name: ${MINIO_VOLUME}
+    external: true

@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+cd "$(dirname "$0")/../"
+
+if [[ ! -f ".env" ]]; then
+    echo ".env file not found!"
+    exit 1
+fi
+
+SED=$(which gsed || which sed)
+
+if [[ -z "$SED" ]]; then
+    echo "GNU Sed not found!"
+    exit 1
+fi
+
+if [[ -z "$(which fswatch)" ]]; then
+    echo "fswatch not found!"
+    exit 1
+fi
+
+if [[ -z "$(which bun)" ]]; then
+    echo "Bun not found!"
+    exit 1
+fi
+
+source .env
+
+APP_NAME=$(basename "$(pwd)")
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
+CURRENT_BRANCH_HASH=$(echo -n "$CURRENT_BRANCH" | gzip -1 -c | tail -c8 | hexdump -n4 -e '"%08x"')
+
+if [[ "$CURRENT_BRANCH" == "master" ]]; then
+    export MYSQL_VOLUME="$APP_NAME-mysql-master-data"
+    export REDIS_VOLUME="$APP_NAME-redis-master-data"
+    export MINIO_VOLUME="$APP_NAME-minio-master-data"
+else
+    export MYSQL_VOLUME="$APP_NAME-mysql-$CURRENT_BRANCH_HASH-data"
+    export REDIS_VOLUME="$APP_NAME-redis-$CURRENT_BRANCH_HASH-data"
+    export MINIO_VOLUME="$APP_NAME-minio-$CURRENT_BRANCH_HASH-data"
+fi
+
+VOLUMES=(MYSQL_VOLUME REDIS_VOLUME MINIO_VOLUME)
+
+for VOLUME in "${VOLUMES[@]}"; do
+    if [[ -z "$(docker volume ls -q -f name="${!VOLUME}")" ]]; then
+        echo "Creating volume: ${!VOLUME}..."
+        docker volume create "${!VOLUME}" > /dev/null
+
+        if [[ "$CURRENT_BRANCH" != "master" ]]; then
+            MASTER_VOLUME=$(echo -n "${!VOLUME}" | $SED -E "s/(.*?)-$CURRENT_BRANCH_HASH-data/\1-master-data/g")
+
+            if [[ -z "$(docker volume ls -q -f name="${MASTER_VOLUME}")" ]]; then
+                echo "Master volume not found: $MASTER_VOLUME"
+                docker volume rm "${!VOLUME}" > /dev/null
+                exit 1
+            fi
+
+            echo "Copying data from master volume..."
+            docker run --rm -v "$MASTER_VOLUME:/from" -v "${!VOLUME}:/to" busybox sh -c "cd /from; cp -a . /to" > /dev/null 2>&1
+        fi
+    fi
+done
+
+DC="docker compose --file compose.yml --project-name $APP_NAME"
+
+if [[ "$DB_CONNECTION" == "mysql" ]]; then
+    DC="$DC --profile with-mysql"
+fi
+
+if [[ "$FILESYSTEM_DISK" == "s3" ]]; then
+    DC="$DC --profile with-minio"
+fi
+
+ARTISAN="php -d variables_order=EGPCS artisan"
+
+WATCH=(
+    "app"
+    "bootstrap"
+    "config/**/*.php"
+    "database/**/*.php"
+    "public/**/*.php"
+    "resources/**/*.php"
+    "composer.lock"
+    ".env"
+)
+
+HTTP_PID=-1
+QUEUE_PID=-1
+SCHEDULE_PID=-1
+BUILD_PID=-1
+
+stop() {
+    kill -s TERM "$1" 2>/dev/null || true
+    wait "$1" 2>/dev/null || true
+}
+
+start_services() {
+    $DC up --pull=always --wait --remove-orphans
+
+    bun run dev > /dev/null 2>&2 &
+    BUILD_PID=$!
+}
+
+stop_services() {
+    $DC down
+
+    if [[ "$BUILD_PID" -ne -1 ]]; then
+        stop "$BUILD_PID"
+    fi
+}
+
+start_application() {
+    $ARTISAN octane:start --port=8000 --host=127.0.0.1 --workers=4 --task-workers=4 1>&1 2>&2 &
+    HTTP_PID=$!
+
+    $ARTISAN queue:work --rest=3 1>&1 2>&2 &
+    QUEUE_PID=$!
+
+    $ARTISAN schedule:work 1>&1 2>&2 &
+    SCHEDULE_PID=$!
+}
+
+stop_application() {
+    if [[ "$HTTP_PID" -ne -1 ]]; then
+        stop "$HTTP_PID"
+    fi
+
+    if [[ "$QUEUE_PID" -ne -1 ]]; then
+        stop "$QUEUE_PID"
+    fi
+
+    if [[ "$SCHEDULE_PID" -ne -1 ]]; then
+        stop "$SCHEDULE_PID"
+    fi
+}
+
+shutdown() {
+    echo "Stopping application components..."
+    stop_application
+
+    echo "Stopping services..."
+    stop_services
+
+    exit 0
+}
+
+trap shutdown EXIT
+
+echo "Starting services..."
+start_services
+
+echo "Starting application components..."
+start_application
+
+trap shutdown INT TERM
+
+echo 'Watching for file changes...'
+
+while true; do
+    if fswatch -1 "${WATCH[@]}"; then
+        echo "File change detected, restarting application components..."
+        stop_application
+        start_application
+    fi
+done
