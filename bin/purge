@@ -38,7 +38,6 @@ else
 fi
 
 if [[ "${#VOLUMES[@]}" -eq 0 ]]; then
-    echo "No volumes found!"
     exit 0
 fi
 
@@ -49,5 +48,4 @@ for VOLUME in "${VOLUMES[@]}"; do
     fi
 done
 
-echo "Done!"
 exit 0

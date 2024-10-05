@@ -136,6 +136,10 @@ stop_application() {
     fi
 }
 
+migrations() {
+    $ARTISAN migrate --graceful --force
+}
+
 shutdown() {
     echo "Stopping application components..."
     stop_application
@@ -151,10 +155,13 @@ trap shutdown EXIT
 echo "Starting services..."
 start_services
 
+echo "Running migrations..."
+migrations
+
 echo "Starting application components..."
 start_application
 
-trap shutdown INT TERM
+trap "exit 0" INT TERM
 
 echo 'Watching for file changes...'
 
