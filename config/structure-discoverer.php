@@ -19,7 +19,7 @@ return [
      *  Configure the cache driver for discoverers
      */
     'cache' => [
-        'driver' => \Spatie\StructureDiscoverer\Cache\LaravelDiscoverCacheDriver::class,
+        'driver' => Spatie\StructureDiscoverer\Cache\LaravelDiscoverCacheDriver::class,
         'store' => null,
     ],
 ];

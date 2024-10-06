@@ -81,7 +81,7 @@ return [
         ],
 
         RequestTerminated::class => [
-            // FlushUploadedFiles::class,
+            FlushUploadedFiles::class,
         ],
 
         TaskReceived::class => [
