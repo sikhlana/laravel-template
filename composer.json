@@ -5,21 +5,25 @@
     "keywords": ["laravel", "framework", "template"],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "ext-curl": "*",
         "ext-intl": "*",
         "ext-pdo": "*",
         "ext-redis": "*",
         "ext-swoole": "*",
         "dedoc/scramble": "^0.11.16",
+        "intervention/image": "^3.8",
+        "intervention/validation": "^4.4",
         "laravel/framework": "^11.9",
         "laravel/octane": "^2.5",
         "laravel/reverb": "^1.4",
         "laravel/sanctum": "^4.0",
+        "laravel/socialite": "^5.16",
         "laravel/tinker": "^2.9",
         "laravel/ui": "^4.5",
         "nikic/php-parser": "^5.3",
         "phpstan/phpdoc-parser": "^1.32",
+        "sentry/sentry-laravel": "^4.9",
         "sikhlana/laravel-singleton": "^2.0",
         "spatie/laravel-permission": "^6.9",
         "spatie/laravel-query-builder": "^6.2",
@@ -37,6 +41,9 @@
         "phpunit/phpunit": "^11.0.1"
     },
     "autoload": {
+        "files": [
+            "app/Support/helpers.php"
+        ],
         "psr-4": {
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
