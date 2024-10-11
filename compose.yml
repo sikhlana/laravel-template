@@ -30,7 +30,7 @@ services:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       start_period: 5s
       interval: 10s
-      retries: 5
+      retries: 10
 
   mailpit:
     image: axllent/mailpit:latest
@@ -56,6 +56,26 @@ services:
     entrypoint: ["sh"]
     command: ["-c", "mkdir -p /data/${AWS_BUCKET} && minio server /data"]
 
+  elasticsearch:
+    image: elasticsearch:8.15.2
+    profiles:
+      - with-elasticsearch
+    ports:
+      - "29200:9200/tcp"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    environment:
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD}
+      - discovery.type=single-node
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      - bootstrap.memory_lock=true
+      - action.destructive_requires_name=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
 volumes:
   mysql-data:
     name: ${MYSQL_VOLUME}
@@ -66,4 +86,7 @@ volumes:
   mailpit-data: {}
   minio-data:
     name: ${MINIO_VOLUME}
+    external: true
+  elasticsearch-data:
+    name: ${ELASTICSEARCH_VOLUME}
     external: true

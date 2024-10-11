@@ -35,13 +35,15 @@ if [[ "$CURRENT_BRANCH" == "master" ]]; then
     export MYSQL_VOLUME="$APP_NAME-mysql-master-data"
     export REDIS_VOLUME="$APP_NAME-redis-master-data"
     export MINIO_VOLUME="$APP_NAME-minio-master-data"
+    export ELASTICSEARCH_VOLUME="$APP_NAME-elasticsearch-master-data"
 else
     export MYSQL_VOLUME="$APP_NAME-mysql-$CURRENT_BRANCH_HASH-data"
     export REDIS_VOLUME="$APP_NAME-redis-$CURRENT_BRANCH_HASH-data"
     export MINIO_VOLUME="$APP_NAME-minio-$CURRENT_BRANCH_HASH-data"
+    export ELASTICSEARCH_VOLUME="$APP_NAME-elasticsearch-$CURRENT_BRANCH_HASH-data"
 fi
 
-VOLUMES=(MYSQL_VOLUME REDIS_VOLUME MINIO_VOLUME)
+VOLUMES=(MYSQL_VOLUME REDIS_VOLUME MINIO_VOLUME ELASTICSEARCH_VOLUME)
 
 for VOLUME in "${VOLUMES[@]}"; do
     if [[ -z "$(docker volume ls -q -f name="${!VOLUME}")" ]]; then
@@ -58,7 +60,7 @@ for VOLUME in "${VOLUMES[@]}"; do
             fi
 
             echo "Copying data from master volume..."
-            docker run --rm -v "$MASTER_VOLUME:/from" -v "${!VOLUME}:/to" busybox sh -c "cd /from; cp -a . /to" > /dev/null 2>&1
+            docker run --rm -v "$MASTER_VOLUME:/from" -v "${!VOLUME}:/to" busybox sh -c "cd /from; cp -a . /to" > /dev/null
         fi
     fi
 done
@@ -71,6 +73,10 @@ fi
 
 if [[ "$FILESYSTEM_DISK" == "s3" ]]; then
     DC="$DC --profile with-minio"
+fi
+
+if [[ "$SCOUT_DRIVER" == "elasticsearch" ]]; then
+    DC="$DC --profile with-elasticsearch"
 fi
 
 ARTISAN="php -d variables_order=EGPCS artisan"
@@ -90,6 +96,7 @@ HTTP_PID=-1
 QUEUE_PID=-1
 SCHEDULE_PID=-1
 BUILD_PID=-1
+WS_PID=-1
 
 stop() {
     kill -s TERM "$1" 2>/dev/null || true
@@ -112,7 +119,7 @@ stop_services() {
 }
 
 start_application() {
-    $ARTISAN octane:start --port=8000 --host=127.0.0.1 --workers=4 --task-workers=4 1>&1 2>&2 &
+    $ARTISAN octane:start --host=127.0.0.1 --port=8000 --workers=4 --task-workers=4 1>&1 2>&2 &
     HTTP_PID=$!
 
     $ARTISAN queue:work --rest=3 1>&1 2>&2 &
@@ -120,6 +127,9 @@ start_application() {
 
     $ARTISAN schedule:work 1>&1 2>&2 &
     SCHEDULE_PID=$!
+
+    $ARTISAN reverb:start --host=127.0.0.1 --port=9000 1>&1 2>&2 &
+    WS_PID=$!
 }
 
 stop_application() {
@@ -134,10 +144,16 @@ stop_application() {
     if [[ "$SCHEDULE_PID" -ne -1 ]]; then
         stop "$SCHEDULE_PID"
     fi
+
+    if [[ "$WS_PID" -ne -1 ]]; then
+        stop "$WS_PID"
+    fi
 }
 
-migrations() {
-    $ARTISAN migrate --graceful --force
+prepare() {
+    $ARTISAN migrate --force
+    $ARTISAN seed:roles
+    $ARTISAN seed:permissions
 }
 
 shutdown() {
@@ -155,8 +171,8 @@ trap shutdown EXIT
 echo "Starting services..."
 start_services
 
-echo "Running migrations..."
-migrations
+echo "Preparing..."
+prepare
 
 echo "Starting application components..."
 start_application

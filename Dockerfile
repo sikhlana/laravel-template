@@ -72,6 +72,5 @@ RUN mkdir -p storage/app/private storage/app/public storage/framework/cache/data
 
 STOPSIGNAL SIGTERM
 
-SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
 ENTRYPOINT ["/sbin/tini", "--", "/entrypoint.sh"]
 CMD ["tinker"]

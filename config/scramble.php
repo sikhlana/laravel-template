@@ -83,5 +83,8 @@ return [
         RestrictedDocsAccess::class,
     ],
 
-    'extensions' => [],
+    'extensions' => [
+        App\Support\Scramble\Extensions\EnumOptionsResponseExtension::class,
+        App\Support\Scramble\Extensions\ResourceListResponseExtension::class,
+    ],
 ];

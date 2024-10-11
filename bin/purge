@@ -28,13 +28,15 @@ else
         export MYSQL_VOLUME="$APP_NAME-mysql-master-data"
         export REDIS_VOLUME="$APP_NAME-redis-master-data"
         export MINIO_VOLUME="$APP_NAME-minio-master-data"
+        export ELASTICSEARCH_VOLUME="$APP_NAME-elasticsearch-master-data"
     else
         export MYSQL_VOLUME="$APP_NAME-mysql-$CURRENT_BRANCH_HASH-data"
         export REDIS_VOLUME="$APP_NAME-redis-$CURRENT_BRANCH_HASH-data"
         export MINIO_VOLUME="$APP_NAME-minio-$CURRENT_BRANCH_HASH-data"
+        export ELASTICSEARCH_VOLUME="$APP_NAME-elasticsearch-$CURRENT_BRANCH_HASH-data"
     fi
 
-    VOLUMES=("$MYSQL_VOLUME" "$REDIS_VOLUME" "$MINIO_VOLUME")
+    VOLUMES=("$MYSQL_VOLUME" "$REDIS_VOLUME" "$MINIO_VOLUME" "$ELASTICSEARCH_VOLUME")
 fi
 
 if [[ "${#VOLUMES[@]}" -eq 0 ]]; then
